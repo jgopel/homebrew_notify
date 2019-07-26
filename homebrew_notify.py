@@ -59,3 +59,34 @@ def brew_cask_outdated():
                 current_version=match.group("current_version"),
             ))
     return output
+
+
+def notify_outdated_formula():
+    """Send notification about formula that are outdated"""
+    def get_notification_string(num_items, item_name):
+        if num_items < 1:
+            return None
+
+        output = f"{num_items} {item_name}"
+        if num_items > 1:
+            output += "s"
+        return output
+
+    # Check brew for updates
+    brew_update()
+    outdated_taps = brew_outdated()
+    outdated_casks = brew_cask_outdated()
+
+    # Don't notify if there are no updates
+    if not outdated_taps + outdated_casks:
+        return
+
+    # Build notification
+    tap_text = get_notification_string(len(outdated_taps), "tap")
+    cask_text = get_notification_string(len(outdated_casks), "cask")
+    formulae_text = " and ".join([x for x in [tap_text, cask_text] if x is not None])
+    notify(
+        title="Homebrew Updates Available",
+        subtitle=f"There are updates to {formulae_text}",
+        text=" ".join(sorted([x.package for x in outdated_taps + outdated_casks])),
+    )
