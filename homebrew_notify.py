@@ -8,7 +8,8 @@ import subprocess
 
 from pathlib import Path
 
-INSTALL_DIR = ".homebrew_notify"
+INSTALL_DIR = Path.home() / ".homebrew_notify"
+SCRIPT_INSTALL_LOCATION = INSTALL_DIR / "homebrew_notify.py"
 
 # Type for casks and taps that are outdated
 OutdatedFormuala = collections.namedtuple(typename="OutdatedFormual",
@@ -118,19 +119,17 @@ def notify_outdated_formula():
 
 def install():
     """Copy script to home directory and install it in the crontab"""
-    script_install_location = Path.home() / INSTALL_DIR / "homebrew_notify.py"
-
     def copy_file():
         import shutil
-        script_install_location.parent.mkdir(parents=True, exist_ok=True)
+        SCRIPT_INSTALL_LOCATION.parent.mkdir(parents=True, exist_ok=True)
         # TODO: Warn on an update once there's logging
-        shutil.copy(src=__file__, dst=script_install_location)
+        shutil.copy(src=__file__, dst=SCRIPT_INSTALL_LOCATION)
 
     def setup_crontab():
         current_crontab = subprocess.run(["crontab", "-l"], check=True, capture_output=True, text=True).stdout.strip()
-        if str(script_install_location) in current_crontab:
+        if str(SCRIPT_INSTALL_LOCATION) in current_crontab:
             raise RuntimeError("Homebrew Notify already installed in crontab. Not updating crontab.")
-        crontab_line = f"*/30 * * * * PATH=/usr/local/bin:$PATH {script_install_location}"
+        crontab_line = f"*/30 * * * * PATH=/usr/local/bin:$PATH {SCRIPT_INSTALL_LOCATION}"
         new_crontab = "\n".join([current_crontab, crontab_line])
         subprocess.run(["crontab", "-"], check=True, capture_output=True, text=True, input=new_crontab)
 
