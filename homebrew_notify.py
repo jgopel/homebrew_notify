@@ -47,12 +47,13 @@ def notify(*, text, title=None, subtitle=None):
 
 def brew_update():
     """Do the `brew update` command"""
-    subprocess.check_call(["brew", "update"], stdout=subprocess.DEVNULL)
+    subprocess.run(["brew", "update"], check=True, capture_output=True)
 
 
 def brew_outdated():
     """Do the `brew outdated` command"""
-    outdated_taps = json.loads(subprocess.check_output(["brew", "outdated", "--json=v1"]))
+    outdated_taps = json.loads(
+        subprocess.run(["brew", "outdated", "--json=v1"], check=True, capture_output=True, text=True).stdout)
     return [
         OutdatedFormuala(
             package=tap["name"],
@@ -64,8 +65,11 @@ def brew_outdated():
 
 def brew_cask_outdated():
     """Do the `brew cask outdated` command"""
-    outdated_casks = subprocess.check_output(["brew", "cask", "outdated", "--verbose"],
-                                             stderr=subprocess.STDOUT).decode("utf8")
+    outdated_casks = subprocess.run(["brew", "cask", "outdated", "--verbose"],
+                                    check=True,
+                                    capture_output=True,
+                                    text=True).stdout
+
     output = []
     for line in outdated_casks.splitlines():
         match = CASK_VERSION_REGEX.match(line)
