@@ -31,9 +31,14 @@ def parse_args():
         help="Setup notifier to run automatically",
         action="store_true",
     )
+    parser.add_argument(
+        "--uninstall",
+        help="Stop automatically notifying and remove installed scripts",
+        action="store_true",
+    )
 
     args = parser.parse_args()
-    return args.install
+    return args.install, args.uninstall
 
 
 def notify(*, text, title=None, subtitle=None):
@@ -194,7 +199,7 @@ def install():
     """Copy script to home directory and install it in the crontab"""
     def copy_file():
         import shutil
-        SCRIPT_INSTALL_LOCATION.parent.mkdir(parents=True, exist_ok=True)
+        INSTALL_DIR.mkdir(parents=True, exist_ok=True)
         # TODO: Warn on an update once there's logging
         shutil.copy(src=__file__, dst=SCRIPT_INSTALL_LOCATION)
 
@@ -217,12 +222,25 @@ def install():
     setup_crontab()
 
 
+def uninstall():
+    """Remove all traces of the installed script"""
+    def remove_install_directory():
+        import shutil
+        shutil.rmtree(path=INSTALL_DIR)
+
+    _, crontab = remove_self_from_crontab(get_current_crontab())
+    update_crontab(crontab)
+    remove_install_directory()
+
+
 def main():
     """Run when script is run"""
 
-    do_install = parse_args()
+    do_install, do_uninstall = parse_args()
     if do_install:
         install()
+    elif do_uninstall:
+        uninstall()
     else:
         notify_outdated_formula()
 
