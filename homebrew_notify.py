@@ -36,9 +36,14 @@ def parse_args():
         help="Stop automatically notifying and remove installed scripts",
         action="store_true",
     )
+    parser.add_argument(
+        "--notify-once",
+        help="Once a specific update has been notified on (in this mode), prevent further notifications",
+        action="store_true",
+    )
 
     args = parser.parse_args()
-    return args.install, args.uninstall
+    return args.install, args.uninstall, args.notify_once
 
 
 def notify(*, text, title=None, subtitle=None):
@@ -127,7 +132,7 @@ def get_reporeted_casks():
     return load_formula_list(REPORTED_CASKS_FILE)
 
 
-def notify_taps_and_casks(*, taps, casks):
+def notify_taps_and_casks(*, taps, casks, always_notify):
     """Send notification about the provided taps and casks"""
     def get_notification_string(num_items, item_name):
         if num_items < 1:
@@ -140,6 +145,8 @@ def notify_taps_and_casks(*, taps, casks):
 
     # Don't notify if there are no updates
     if not taps + casks:
+        if always_notify:
+            notify(text="", title="No tap or cask updates available")
         return
 
     # Build notification
@@ -153,20 +160,24 @@ def notify_taps_and_casks(*, taps, casks):
     )
 
 
-def notify_outdated_formula():
+def notify_outdated_formula(*, always_notify=True):
     """Send notification about formula that are outdated"""
     brew_update()
 
     outdated_taps = brew_outdated()
     outdated_casks = brew_cask_outdated()
 
-    reported_taps = get_reporeted_taps()
-    reported_casks = get_reporeted_casks()
+    need_to_notify = always_notify
+    if not always_notify:
+        reported_taps = get_reporeted_taps()
+        reported_casks = get_reporeted_casks()
+        need_to_notify = outdated_taps != reported_taps or outdated_casks != reported_casks
 
-    if outdated_taps != reported_taps or outdated_casks != reported_casks:
-        notify_taps_and_casks(taps=outdated_taps, casks=outdated_casks)
-        update_reported_taps(outdated_taps)
-        update_reported_casks(outdated_casks)
+    if need_to_notify:
+        notify_taps_and_casks(taps=outdated_taps, casks=outdated_casks, always_notify=always_notify)
+        if not always_notify:
+            update_reported_taps(outdated_taps)
+            update_reported_casks(outdated_casks)
 
 
 def get_current_crontab():
@@ -214,7 +225,7 @@ def install():
             print("Removing currently installed Homebrew Notifier (Ruby)")
 
         # Add self to crontab
-        new_line = f"*/30 * * * * PATH=/usr/local/bin:$PATH {SCRIPT_INSTALL_LOCATION}"
+        new_line = f"*/30 * * * * PATH=/usr/local/bin:$PATH {SCRIPT_INSTALL_LOCATION} --notify-once"
         crontab.append(new_line)
         update_crontab(crontab)
 
@@ -236,13 +247,13 @@ def uninstall():
 def main():
     """Run when script is run"""
 
-    do_install, do_uninstall = parse_args()
+    do_install, do_uninstall, notify_once = parse_args()
     if do_install:
         install()
     elif do_uninstall:
         uninstall()
     else:
-        notify_outdated_formula()
+        notify_outdated_formula(always_notify=not notify_once)
 
 
 if __name__ == "__main__":
