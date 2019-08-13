@@ -164,6 +164,32 @@ def notify_outdated_formula():
         update_reported_casks(outdated_casks)
 
 
+def get_current_crontab():
+    """Get list of current crontab lines"""
+    return subprocess.run(["crontab", "-l"], check=True, capture_output=True, text=True).stdout.splitlines()
+
+
+def remove_pattern_from_crontab(*, crontab, pattern):
+    """Remove lines from crontab based on pattern matching"""
+    new_crontab = [line for line in crontab if pattern not in line]
+    return len(crontab) != len(new_crontab), new_crontab
+
+
+def remove_self_from_crontab(crontab):
+    """Remove homebrew_notify (this script) from crontab"""
+    return remove_pattern_from_crontab(crontab=crontab, pattern=str(SCRIPT_INSTALL_LOCATION))
+
+
+def remove_homebrew_notifier_from_crontab(crontab):
+    """Remove homebrew-notifier (the Ruby script) from crontab"""
+    return remove_pattern_from_crontab(crontab=crontab, pattern=".homebrew-notifier/notifier.sh")
+
+
+def update_crontab(new_crontab):
+    """Replace crontab with new crontab"""
+    subprocess.run(["crontab", "-"], check=True, capture_output=True, text=True, input="\n".join(new_crontab))
+
+
 def install():
     """Copy script to home directory and install it in the crontab"""
     def copy_file():
@@ -173,26 +199,19 @@ def install():
         shutil.copy(src=__file__, dst=SCRIPT_INSTALL_LOCATION)
 
     def setup_crontab():
-        # Get current crontab
-        current_crontab = subprocess.run(["crontab", "-l"], check=True, capture_output=True, text=True).stdout.strip()
+        # Remove any entries that would duplicate functionality
+        crontab = get_current_crontab()
+        removed_self, crontab = remove_self_from_crontab(crontab)
+        if removed_self:
+            print("Replacing currently installed Homebrew Notify")
+        removed_ruby, crontab = remove_homebrew_notifier_from_crontab(crontab)
+        if removed_ruby:
+            print("Removing currently installed Homebrew Notifier (Ruby)")
 
-        # Remove unwanted lines from current crontab before updating it
-        new_crontab = []
-        for line in current_crontab.splitlines():
-            if str(SCRIPT_INSTALL_LOCATION) in line:
-                print("Replacing currently installed Homebrew Notify")
-                continue
-            if ".homebrew-notifier/notifier.sh" in line:
-                print("Removing currently installed Homebrew Notifier (Ruby)")
-                continue
-            new_crontab.append(line)
-
-        # Add installed script to new crontab
+        # Add self to crontab
         new_line = f"*/30 * * * * PATH=/usr/local/bin:$PATH {SCRIPT_INSTALL_LOCATION}"
-        new_crontab.append(new_line)
-
-        # Write new crontab file
-        subprocess.run(["crontab", "-"], check=True, capture_output=True, text=True, input="\n".join(new_crontab))
+        crontab.append(new_line)
+        update_crontab(crontab)
 
     copy_file()
     setup_crontab()
