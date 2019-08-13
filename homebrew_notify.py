@@ -10,6 +10,8 @@ from pathlib import Path
 
 INSTALL_DIR = Path.home() / ".homebrew_notify"
 SCRIPT_INSTALL_LOCATION = INSTALL_DIR / "homebrew_notify.py"
+REPORTED_TAPS_FILE = INSTALL_DIR / "reported_taps.json"
+REPORTED_CASKS_FILE = INSTALL_DIR / "reported_casks.json"
 
 # Type for casks and taps that are outdated
 OutdatedFormuala = collections.namedtuple(typename="OutdatedFormual",
@@ -85,6 +87,41 @@ def brew_cask_outdated():
     return output
 
 
+def store_formula_list(*, formula_list, file_path):
+    """Store outdated formulas to a file"""
+    with open(file_path, mode="w+") as json_file:
+        json.dump([formula._asdict() for formula in formula_list], json_file, indent=4)
+
+
+def load_formula_list(file_path):
+    """Load outdated formulas from a file"""
+    try:
+        with open(file_path, mode="r") as json_file:
+            return [OutdatedFormuala(**tap) for tap in json.load(json_file)]
+    except FileNotFoundError:
+        return {}
+
+
+def update_reported_taps(taps):
+    """Store reported taps to file"""
+    store_formula_list(formula_list=taps, file_path=REPORTED_TAPS_FILE)
+
+
+def update_reported_casks(casks):
+    """Store reported casks to file"""
+    store_formula_list(formula_list=casks, file_path=REPORTED_CASKS_FILE)
+
+
+def get_reporeted_taps():
+    """Load reported taps from file"""
+    return load_formula_list(REPORTED_TAPS_FILE)
+
+
+def get_reporeted_casks():
+    """Load reported casks from file"""
+    return load_formula_list(REPORTED_CASKS_FILE)
+
+
 def notify_taps_and_casks(*, taps, casks):
     """Send notification about the provided taps and casks"""
     def get_notification_string(num_items, item_name):
@@ -114,7 +151,17 @@ def notify_taps_and_casks(*, taps, casks):
 def notify_outdated_formula():
     """Send notification about formula that are outdated"""
     brew_update()
-    notify_taps_and_casks(taps=brew_outdated(), casks=brew_cask_outdated())
+
+    outdated_taps = brew_outdated()
+    outdated_casks = brew_cask_outdated()
+
+    reported_taps = get_reporeted_taps()
+    reported_casks = get_reporeted_casks()
+
+    if outdated_taps != reported_taps or outdated_casks != reported_casks:
+        notify_taps_and_casks(taps=outdated_taps, casks=outdated_casks)
+        update_reported_taps(outdated_taps)
+        update_reported_casks(outdated_casks)
 
 
 def install():
